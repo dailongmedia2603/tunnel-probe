@@ -1,0 +1,55 @@
+name: Build TunnelProbe
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Install ldid
+        run: brew install ldid-procursus
+
+      - name: Build TunnelProbe.tipa
+        run: REQUIRE_LDID=1 ./build.sh
+
+      - name: Verify signatures
+        run: |
+          cd build/Payload/TunnelProbe.app
+          for b in TunnelProbe probehelper PlugIns/PacketTunnel.appex/PacketTunnel; do
+            echo "== $b"
+            ldid -e "$b" | grep -E "networkextension|persona|platform-application|application-identifier" || true
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TunnelProbe
+          path: |
+            build/TunnelProbe.tipa
+            vps/setup-probe.sh
+
+      - name: Publish "latest" release
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest build/TunnelProbe.tipa vps/setup-probe.sh \
+            --title "TunnelProbe (build ${GITHUB_SHA::7})" \
+            --notes "Bản test tunnel cho iPhone (TrollStore). Cài TunnelProbe.tipa bằng TrollStore; chạy setup-probe.sh trên VPS."
