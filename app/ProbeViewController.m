@@ -583,6 +583,9 @@ static const int kProbePort = 51821;
 
 - (BOOL)startManager:(NETunnelProviderManager *)m timeout:(NSTimeInterval)timeout error:(NSString **)error {
     NETunnelProviderSession *session = (NETunnelProviderSession *)m.connection;
+    if (session.status != NEVPNStatusDisconnected && session.status != NEVPNStatusInvalid) {
+        [self stopManager:m]; // never reuse a tunnel started with an older config
+    }
     NSError *e = nil;
     if (![session startVPNTunnelAndReturnError:&e]) {
         if (error) *error = [NSString stringWithFormat:@"startVPNTunnel: %@", e.localizedDescription];
